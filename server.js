@@ -1,24 +1,72 @@
-const io = require('socket.io')(3000, {
+const express = require('express');
+const app = express();
+const server = require('http').Server(app);
+
+const io = require('socket.io')(server, {
   cors: {
-    origin: ['http://localhost:5500', 'http://127.0.0.1:5500'],
+    origin: [
+      'http://localhost:5500',
+      'http://127.0.0.1:5500',
+      'http://127.0.0.1:3000',
+    ],
   },
 });
 
-const users = {};
+app.set('views', './views');
+app.set('view engine', 'ejs');
+app.use(express.static('public'));
+app.use(express.urlencoded({ extended: true }));
+
+const rooms = {};
+
+app.get('/', (req, res) => {
+  res.render('index', { rooms: rooms });
+});
+
+app.get('/:room', (req, res) => {
+  if (rooms[req.params.room] == null) {
+    return res.redirect('/');
+  }
+  res.render('room', { roomName: req.params.room });
+});
+
+app.post('/room', (req, res) => {
+  if (rooms[req.body.room] != null) {
+    return res.redirect('/');
+  }
+  rooms[req.body.room] = { users: {} };
+  res.redirect(req.body.room);
+  // Send Message that room has been created
+  io.emit('room-created', req.body.room);
+});
+
+server.listen(3000);
 
 io.on('connection', (socket) => {
-  socket.on('send-chat-message', (message) => {
-    socket.broadcast.emit('chat-message', {
+  socket.on('new-user', (room, name) => {
+    socket.join(room);
+    rooms[room].users[socket.id] = name;
+    socket.to(room).emit('user-connected', name);
+  });
+  socket.on('send-chat-message', (room, message) => {
+    socket.to(room).emit('chat-message', {
       message: message,
-      name: users[socket.id],
+      name: rooms[room].users[socket.id],
     });
   });
-  socket.on('new-user', (name) => {
-    users[socket.id] = name;
-    socket.broadcast.emit('user-connected', name);
-  });
   socket.on('disconnect', () => {
-    socket.broadcast.emit('user-disconnected', users[socket.id]);
-    delete users[socket.id];
+    getUserRooms(socket).forEach((room) => {
+      socket.to(room).emit('user-disconnected', rooms[room].users[socket.id]);
+      delete rooms[room].users[socket.id];
+    });
   });
 });
+
+const getUserRooms = (socket) => {
+  return Object.entries(rooms).reduce((names, [name, room]) => {
+    if (room.users[socket.id] != null) {
+      names.push(name);
+    }
+    return names;
+  }, []);
+};
