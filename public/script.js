@@ -3,6 +3,16 @@ const messageContainer = document.getElementById('message-container');
 const roomContainer = document.getElementById('room-container');
 const messageForm = document.getElementById('send-container');
 const messageInput = document.getElementById('message-input');
+const nameForm = document.getElementById('name-form');
+const nameInput = document.getElementById('name-input');
+var name = '';
+if (nameForm != null) {
+  nameForm.addEventListener('submit', (e) => {
+    name = nameInput.value;
+    e.preventDefault();
+    console.log(name);
+  });
+}
 
 socket.on('room-created', (room) => {
   console.log('Room created');
@@ -26,7 +36,7 @@ const appendMessage = (message) => {
 };
 
 if (messageForm != null) {
-  const name = prompt('What is your name?');
+  console.log('Test: ' + name);
   appendMessage('You Joined');
   socket.emit('new-user', roomName, name);
 
